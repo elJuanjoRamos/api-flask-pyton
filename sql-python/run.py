@@ -36,8 +36,8 @@ def parse_date(date):
 @app.route('/publicar', methods=['POST'])
 def send():
     tweetData = request.get_json()
-    tweet = saveDb(Tweet(n=tweetData['nombre'], c=tweetData['comentario'], f=parse_date(tweetData['fecha'])))
-
+    #tweet = saveDb(Tweet(n=tweetData['nombre'], c=tweetData['comentario'], f=parse_date(tweetData['fecha'])))
+    """
     if tweetData['hashtags']:
         list_hash = tweetData['hashtags']
         for i in list_hash:
@@ -47,9 +47,10 @@ def send():
             th = saveDb(TweetHashtag(u=tweetData['upvotes'],d=tweetData['downvotes'],t=tweet.id, h=hash.id))
 
     tweetData['id'] = tweet.id
+    """
 
     create_items(tweetData)
-    add_tweet(tweetData['nombre'], tweetData['comentario'], parse_date(tweetData['fecha']))
+    #add_tweet(tweetData['nombre'], tweetData['comentario'], parse_date(tweetData['fecha']))
     return Response(status=200)
 
 
@@ -100,17 +101,13 @@ def add_tweet(nombre, comentario, fecha):
 
 
 if __name__ == '__main__':
-
-
     client = cosmos_client.CosmosClient(HOST, {'masterKey': MASTER_KEY}, user_agent="CosmosDBPythonQuickstart",
                                         user_agent_overwrite=True)
-
 
     db1 = client.get_database_client(DATABASE_ID)
     container = db1.get_container_client(CONTAINER_ID)
 
-
     #db.create_all()
-    #app.run()
+    app.run()
 
 
