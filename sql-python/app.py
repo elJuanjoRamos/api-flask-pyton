@@ -4,6 +4,7 @@ import azure.cosmos.cosmos_client as cosmos_client
 import config
 import os
 import pymysql
+import random
 
 #AZURE DB
 HOST = config.settings['host']
@@ -22,6 +23,12 @@ db_name = config.settings['CLOUD_SQL_DATABASE_NAME']
 
 app = models.app
 app.debug = True
+
+
+client = cosmos_client.CosmosClient(HOST, {'masterKey': MASTER_KEY}, user_agent="CosmosDBPythonQuickstart",
+                                    user_agent_overwrite=True)
+db1 = client.get_database_client(DATABASE_ID)
+container = db1.get_container_client(CONTAINER_ID)
 
 
 def parse_date(date):
@@ -63,11 +70,11 @@ def saveDb(element):
 
 def create_items(item):
     print('\nCreating Items\n')
-
+    n = random.randint(0,100)
     order1 = {
-        'id' :          str(item['id']),
+        'id' :          item['nombre'] + str(n),
         'nombre' :      item['nombre'],
-        'pk':           str(item['id']),
+        'pk':           item['nombre'] + str(n),
         'comentario' :  item['comentario'],
         'fecha' :       item['fecha'],
         'upvotes' :     item['upvotes'],
@@ -98,16 +105,3 @@ def add_tweet(nombre, comentario, fecha):
             cursor.execute('INSERT INTO Tweet (nombre, comentario, fecha) VALUES(%s, %s, %s)', (nombre, comentario, fecha))
         conn.commit()
         conn.close()
-
-
-if __name__ == '__main__':
-    client = cosmos_client.CosmosClient(HOST, {'masterKey': MASTER_KEY}, user_agent="CosmosDBPythonQuickstart",
-                                        user_agent_overwrite=True)
-
-    db1 = client.get_database_client(DATABASE_ID)
-    container = db1.get_container_client(CONTAINER_ID)
-
-    #db.create_all()
-    app.run()
-
-
