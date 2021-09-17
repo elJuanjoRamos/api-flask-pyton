@@ -38,6 +38,10 @@ def parse_date(date):
     return current[2]+'/'+current[1]+'/'+current[0]
 
 
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({"message": "api montada correctamente"})
+
 @app.route('/iniciaCarga', methods=['GET'])
 def init():
     global cloud
