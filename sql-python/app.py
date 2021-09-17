@@ -1,107 +1,103 @@
-import models
-from models import *
+import mysql.connector as mysql
 import azure.cosmos.cosmos_client as cosmos_client
-import config
 import os
-import pymysql
-import random
+from operator import itemgetter
+from flask import Flask, request, jsonify
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
 
-#AZURE DB
-HOST = config.settings['host']
-MASTER_KEY = config.settings['master_key']
-DATABASE_ID = config.settings['database_id']
-CONTAINER_ID = config.settings['container_id']
+# ENV VARIABLES SQL
+CLOUD_SQL_HOST = os.environ.get("CLOUD_SQL_HOST")
+CLOUD_SQL_DATA = os.environ.get('CLOUD_SQL_DATABASE_NAME')
+CLOUD_SQL_PASS = os.environ.get('CLOUD_SQL_PASSWORD')
+CLOUD_SQL_USER = os.environ.get('CLOUD_SQL_USERNAME')
 
+# ENV VARIABLES AZURE
+ACCOUNT_HOST = os.environ.get("ACCOUNT_HOST")
+ACCOUNT_KEY = os.environ.get("ACCOUNT_KEY")
+COSMOS_DATABASE = os.environ.get("COSMOS_DATABASE")
+COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER")
 
-
-db_connection_name = config.settings['CLOUD_SQL_CONNECTION_NAME']
-db_user = config.settings['CLOUD_SQL_USERNAME']
-db_password = config.settings['CLOUD_SQL_PASSWORD']
-db_name = config.settings['CLOUD_SQL_DATABASE_NAME']
-
-
-
-app = models.app
+# FLASK CONFIG
+app = Flask(__name__)
 app.debug = True
 
 
-client = cosmos_client.CosmosClient(HOST, {'masterKey': MASTER_KEY}, user_agent="CosmosDBPythonQuickstart",
-                                    user_agent_overwrite=True)
-db1 = client.get_database_client(DATABASE_ID)
-container = db1.get_container_client(CONTAINER_ID)
+# GLOBAL VARIABLES
+
+cursor = None
+db = None
+cloud = None
+client = None
+container = None
 
 
-def parse_date(date):
+@app.route('/iniciaCarga', methods=['GET'])
+def init():
+    global cloud
+    global client
+    global db
+    global cursor
+    global container
     try:
-        date_new = date.split('/')
-        return '20' + date_new[2] + '-' + date_new[1] + '-' + date_new[0]
-    except:
-        return '2021-01-01'
+        #CONEXION MYSQL
+        db = mysql.connect(host=CLOUD_SQL_HOST, user=CLOUD_SQL_USER, password=CLOUD_SQL_PASS, database=CLOUD_SQL_DATA)
+        cursor = db.cursor()
 
+        client = cosmos_client.CosmosClient(ACCOUNT_HOST, {'masterKey': ACCOUNT_KEY},
+                                            user_agent="CosmosDBPythonQuickstart", user_agent_overwrite=True)
+        cosmo_db = client.get_database_client(COSMOS_DATABASE)
+        container = cosmo_db.get_container_client(COSMOS_CONTAINER)
+
+        return jsonify({"message": "Conexion creada con exito"})
+    except Exception as e:
+        print(e)
+        return jsonify({"message": "Error al intenar conectar a db"}), 400
 
 
 @app.route('/publicar', methods=['POST'])
 def send():
+
+    status = 400
     tweetData = request.get_json()
-    #tweet = saveDb(Tweet(n=tweetData['nombre'], c=tweetData['comentario'], f=parse_date(tweetData['fecha'])))
-    """
-    if tweetData['hashtags']:
-        list_hash = tweetData['hashtags']
-        for i in list_hash:
-            hash = Hashtag.query.filter_by(texto=i).first()
-            if not hash:
-                hash = saveDb(Hashtag(n=i))
-            th = saveDb(TweetHashtag(u=tweetData['upvotes'],d=tweetData['downvotes'],t=tweet.id, h=hash.id))
+    nombre, comentario, fecha, upvotes,  downvotes, \
+    hashtags = itemgetter('nombre', 'comentario', 'fecha' , 'upvotes', 'downvotes', 'hashtags')(tweetData)
 
-    tweetData['id'] = tweet.id
-    """
-
-    create_items(tweetData)
-    #add_tweet(tweetData['nombre'], tweetData['comentario'], parse_date(tweetData['fecha']))
-    return Response(status=200)
-
-
-
-def saveDb(element):
-    db.session.add(element)
-    db.session.commit()
-    return element;
-
-
-def create_items(item):
-    print('\nCreating Items\n')
-    n = random.randint(0,100)
-    order1 = {
-        'id' :          item['nombre'] + str(n),
-        'nombre' :      item['nombre'],
-        'pk':           item['nombre'] + str(n),
-        'comentario' :  item['comentario'],
-        'fecha' :       item['fecha'],
-        'upvotes' :     item['upvotes'],
-        'downvotes' :   item['downvotes'],
-        'hastags' :     item['hashtags']
-    }
-    container.create_item(body=order1)
-
-
-def open_conetion():
-    unix_socket = '/cloudsql/{}'.format(db_connection_name)
+    list = ""
+    for index, i in enumerate(hashtags):
+        if index == 0:
+            list = str(i)
+        else:
+            list = list + ',' + str(i)
 
     try:
-        if os.environ.get('GAE_ENV') == 'standard':
-            conn = pymysql.connect(user=db_user, password=db_password,
-                                unix_socket=unix_socket, db=db_name,
-                            cursorclass=pymysql.cursors.DictCursor)
-            return conn
-    except pymysql.MySQLError as e:
-        print(e)
-        return None
-    return None
+        query = 'INSERT INTO Tweet(nombre, comentario, fecha, upvotes, downvotes, hashtags) VALUES(%s,%s,%s,%s,%s,%s)'
+        cursor.execute(query, (nombre, comentario, fecha, upvotes, downvotes, list))
+        db.commit()
 
-def add_tweet(nombre, comentario, fecha):
-    conn = open_conetion()
-    if conn:
-        with conn.cursor() as cursor:
-            cursor.execute('INSERT INTO Tweet (nombre, comentario, fecha) VALUES(%s, %s, %s)', (nombre, comentario, fecha))
-        conn.commit()
-        conn.close()
+        tweetData['id'] = str(cursor.lastrowid)
+        tweetData['pk'] = str(cursor.lastrowid)
+
+        status = 200
+    except Exception as e:
+        print(e)
+        return jsonify({"message": "error to insert en db google"}), 400
+    if status == 200:
+        try:
+            print('\nCreating Items\n')
+            container.create_item(body=tweetData)
+            return jsonify({"message": "tweet saved"})
+        except Exception as e:
+            return jsonify({"message": "error to insert en cosmo db"}), 400
+
+
+@app.route('/finalizarCarga', methods=['GET'])
+def close():
+    global db
+    db.disconnect()
+    return jsonify({"message": "connection closed"})
+
+
+if __name__ == '__main__':
+    app.run()
+
