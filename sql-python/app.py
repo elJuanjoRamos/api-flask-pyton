@@ -32,6 +32,12 @@ client = None
 container = None
 
 
+def parse_date(date):
+    current = date.split('/')
+    # YY -- MM -- DD
+    return current[2]+'/'+current[1]+'/'+current[0]
+
+
 @app.route('/iniciaCarga', methods=['GET'])
 def init():
     global cloud
@@ -72,7 +78,7 @@ def send():
 
     try:
         query = 'INSERT INTO Tweet(nombre, comentario, fecha, upvotes, downvotes, hashtags) VALUES(%s,%s,%s,%s,%s,%s)'
-        cursor.execute(query, (nombre, comentario, fecha, upvotes, downvotes, list))
+        cursor.execute(query, (nombre, comentario, parse_date(fecha), upvotes, downvotes, list))
         db.commit()
 
         tweetData['id'] = str(cursor.lastrowid)
