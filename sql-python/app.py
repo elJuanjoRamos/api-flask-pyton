@@ -1,6 +1,8 @@
 import mysql.connector as mysql
 import azure.cosmos.cosmos_client as cosmos_client
 import os
+import pymongo
+
 from operator import itemgetter
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv, find_dotenv
@@ -18,6 +20,10 @@ ACCOUNT_KEY = os.environ.get("ACCOUNT_KEY")
 COSMOS_DATABASE = os.environ.get("COSMOS_DATABASE")
 COSMOS_CONTAINER = os.environ.get("COSMOS_CONTAINER")
 
+# MONGO DB
+
+CLOUD_MONGO_DB = os.environ.get('CLOUD_MONGO_DB')
+
 # FLASK CONFIG
 app = Flask(__name__)
 app.debug = True
@@ -30,7 +36,9 @@ db = None
 cloud = None
 client = None
 container = None
-
+myMongoClient = None
+myMongoDb = None
+myMongoCollection = None
 
 def parse_date(date):
     current = date.split('/')
@@ -38,7 +46,7 @@ def parse_date(date):
     return current[2]+'/'+current[1]+'/'+current[0]
 
 
-@app.route('/', methods=['GET'])
+@app.route('/')
 def home():
     return jsonify({"message": "api montada correctamente"})
 
@@ -49,15 +57,22 @@ def init():
     global db
     global cursor
     global container
+    global myMongoClient
+    global myMongoDb
+    global myMongoCollection
     try:
-        #CONEXION MYSQL
+        # CONEXION MYSQL
         db = mysql.connect(host=CLOUD_SQL_HOST, user=CLOUD_SQL_USER, password=CLOUD_SQL_PASS, database=CLOUD_SQL_DATA)
         cursor = db.cursor()
-
-        client = cosmos_client.CosmosClient(ACCOUNT_HOST, {'masterKey': ACCOUNT_KEY},
-                                            user_agent="CosmosDBPythonQuickstart", user_agent_overwrite=True)
-        cosmo_db = client.get_database_client(COSMOS_DATABASE)
-        container = cosmo_db.get_container_client(COSMOS_CONTAINER)
+        # CONEXION AZURE SQL
+        #client = cosmos_client.CosmosClient(ACCOUNT_HOST, {'masterKey': ACCOUNT_KEY},
+        #                                    user_agent="CosmosDBPythonQuickstart", user_agent_overwrite=True)
+        #cosmo_db = client.get_database_client(COSMOS_DATABASE)
+        #container = cosmo_db.get_container_client(COSMOS_CONTAINER)
+        # CONEXION AZURE MONGO DB
+        myMongoClient = pymongo.MongoClient(CLOUD_MONGO_DB)
+        myMongoDb = myMongoClient['Tweets']
+        myMongoCollection = myMongoDb['Tweet']
 
         return jsonify({"message": "Conexion creada con exito"})
     except Exception as e:
@@ -94,11 +109,21 @@ def send():
         return jsonify({"message": "error to insert en db google"}), 400
     if status == 200:
         try:
-            print('\nCreating Items\n')
+            print('\nCreating Items into AZURE SQL\n')
             container.create_item(body=tweetData)
+            status = 200
+        except Exception as e:
+            return jsonify({"message": "error to insert en cosmo db"}), 400
+    if status == 200:
+        try:
+            print('\nCreating Items into AZURE MONGO\n')
+            myMongoCollection.insert_one(tweetData)
             return jsonify({"message": "tweet saved"})
         except Exception as e:
             return jsonify({"message": "error to insert en cosmo db"}), 400
+
+
+
 
 
 @app.route('/finalizarCarga', methods=['GET'])
