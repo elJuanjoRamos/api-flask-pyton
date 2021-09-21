@@ -107,13 +107,13 @@ def send():
     except Exception as e:
         print(e)
         return jsonify({"message": "error to insert en db google"}), 400
-    if status == 200:
-        try:
-            print('\nCreating Items into AZURE SQL\n')
-            container.create_item(body=tweetData)
-            status = 200
-        except Exception as e:
-            return jsonify({"message": "error to insert en cosmo db"}), 400
+    #if status == 200:
+    #    try:
+    #        print('\nCreating Items into AZURE SQL\n')
+    #        container.create_item(body=tweetData)
+    #        status = 200
+    #    except Exception as e:
+    #        return jsonify({"message": "error to insert en cosmo db"}), 400
     if status == 200:
         try:
             print('\nCreating Items into AZURE MONGO\n')
